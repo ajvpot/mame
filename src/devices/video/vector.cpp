@@ -48,6 +48,9 @@
 #include "render.h"
 #include "screen.h"
 
+#include <iostream>
+#include <iomanip> // For std::setw and std::setfill
+
 
 #define VECTOR_WIDTH_DENOM 512
 
@@ -150,6 +153,8 @@ void vector_device::clear_list(void)
 
 uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
+    int segment_id = 0;
+
 	uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
 	const rectangle &visarea = screen.visible_area();
 	float xscale = 1.0f / (65536 * visarea.width());
@@ -190,14 +195,28 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 		coords.x1 = ((float)curpoint->x - xoffs) * xscale;
 		coords.y1 = ((float)curpoint->y - yoffs) * yscale;
 
-		if (curpoint->intensity != 0)
-		{
-			screen.container().add_line(
-				coords.x0, coords.y0, coords.x1, coords.y1,
-				beam_width,
-				(curpoint->intensity << 24) | (curpoint->col & 0xffffff),
-				flags);
-		}
+        if (curpoint->intensity != 0)
+        {
+            screen.container().add_line(
+                coords.x0, coords.y0, coords.x1, coords.y1,
+                beam_width,
+                (curpoint->intensity << 24) | (curpoint->col & 0xffffff),
+                flags);
+
+            // Print the line segment details
+            std::cout << "Segment ID: " << segment_id << ", "
+                      << "add_line called with: "
+                      << "x0: " << coords.x0 << ", y0: " << coords.y0
+                      << ", x1: " << coords.x1 << ", y1: " << coords.y1
+                      << ", beam_width: " << beam_width
+                      << ", color: " << std::hex << ((curpoint->intensity << 24) | (curpoint->col & 0xffffff)) << std::dec
+                      << ", flags: " << flags << std::endl;
+        }
+        else if (lastx != curpoint->x || lasty != curpoint->y)
+        {
+            // Increment segment ID when blanking occurs and the beam moves
+            segment_id++;
+        }
 
 		lastx = curpoint->x;
 		lasty = curpoint->y;
@@ -205,5 +224,32 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 		curpoint++;
 	}
 
+
+        /*
+    const char* header = "FRAME_DATA\n";
+    const char* trailer = "END_FRAME_DATA\n";
+    std::cout.write(header, strlen(header));
+    std::cout.write(reinterpret_cast<const char*>(&m_vector_index), sizeof(m_vector_index));
+    for (int i = 0; i < m_vector_index; ++i) {
+        const point &pt = m_vector_list[i];
+        std::cout.write(reinterpret_cast<const char*>(&pt.x), sizeof(pt.x));
+        std::cout.write(reinterpret_cast<const char*>(&pt.y), sizeof(pt.y));
+        std::cout.write(reinterpret_cast<const char*>(&pt.col), sizeof(pt.col));
+        std::cout.write(reinterpret_cast<const char*>(&pt.intensity), sizeof(pt.intensity));
+    }
+    std::cout.write(trailer, strlen(trailer));
+
+
+            // Print all points at the end of the function
+    for (int i = 0; i < m_vector_index; ++i) {
+        const point &pt = m_vector_list[i];
+        uint8_t a = pt.col.a();
+        uint8_t r = pt.col.r();
+        uint8_t g = pt.col.g();
+        uint8_t b = pt.col.b();
+        std::cout << "Point " << i << ": (x: " << pt.x << ", y: " << pt.y
+                  << ", col: rgba(" << r << ", " << g << ", "
+                  << b << ", " << a << "), intensity: " << pt.intensity << ")\n";
+    }*/
 	return 0;
 }
