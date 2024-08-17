@@ -149,51 +149,52 @@ void vector_device::clear_list(void)
 {
 	m_vector_index = 0;
 }
-
+#include <iostream> // Include the iostream header for std::cout
+#include <iomanip>  // Include for std::hex and std::setprecision
 
 uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-    int segment_id = 0;
+    int segment_id = 0; // Static variable to maintain segment ID across frames
 
-	uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
-	const rectangle &visarea = screen.visible_area();
-	float xscale = 1.0f / (65536 * visarea.width());
-	float yscale = 1.0f / (65536 * visarea.height());
-	float xoffs = (float)visarea.min_x;
-	float yoffs = (float)visarea.min_y;
+    uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
+    const rectangle &visarea = screen.visible_area();
+    float xscale = 1.0f / (65536 * visarea.width());
+    float yscale = 1.0f / (65536 * visarea.height());
+    float xoffs = (float)visarea.min_x;
+    float yoffs = (float)visarea.min_y;
 
-	point *curpoint;
-	int lastx = 0;
-	int lasty = 0;
+    point *curpoint;
+    int lastx = 0;
+    int lasty = 0;
 
-	curpoint = m_vector_list.get();
+    curpoint = m_vector_list.get();
 
-	screen.container().empty();
-	screen.container().add_rect(0.0f, 0.0f, 1.0f, 1.0f, rgb_t(0xff,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA) | PRIMFLAG_VECTORBUF(1));
+    screen.container().empty();
+    screen.container().add_rect(0.0f, 0.0f, 1.0f, 1.0f, rgb_t(0xff,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA) | PRIMFLAG_VECTORBUF(1));
 
-	for (int i = 0; i < m_vector_index; i++)
-	{
-		render_bounds coords;
+    for (int i = 0; i < m_vector_index; i++)
+    {
+        render_bounds coords;
 
-		float intensity = (float)curpoint->intensity / 255.0f;
-		float intensity_weight = normalized_sigmoid(intensity, vector_options::s_beam_intensity_weight);
+        float intensity = (float)curpoint->intensity / 255.0f;
+        float intensity_weight = normalized_sigmoid(intensity, vector_options::s_beam_intensity_weight);
 
-		// check for static intensity
-		float beam_width = m_min_intensity == m_max_intensity
-			? vector_options::s_beam_width_min
-			: vector_options::s_beam_width_min + intensity_weight * (vector_options::s_beam_width_max - vector_options::s_beam_width_min);
+        // check for static intensity
+        float beam_width = m_min_intensity == m_max_intensity
+            ? vector_options::s_beam_width_min
+            : vector_options::s_beam_width_min + intensity_weight * (vector_options::s_beam_width_max - vector_options::s_beam_width_min);
 
-		// normalize width
-		beam_width *= 1.0f / (float)VECTOR_WIDTH_DENOM;
+        // normalize width
+        beam_width *= 1.0f / (float)VECTOR_WIDTH_DENOM;
 
-		// apply point scale for points
-		if (lastx == curpoint->x && lasty == curpoint->y)
-			beam_width *= vector_options::s_beam_dot_size;
+        // apply point scale for points
+        if (lastx == curpoint->x && lasty == curpoint->y)
+            beam_width *= vector_options::s_beam_dot_size;
 
-		coords.x0 = ((float)lastx - xoffs) * xscale;
-		coords.y0 = ((float)lasty - yoffs) * yscale;
-		coords.x1 = ((float)curpoint->x - xoffs) * xscale;
-		coords.y1 = ((float)curpoint->y - yoffs) * yscale;
+        coords.x0 = ((float)lastx - xoffs) * xscale;
+        coords.y0 = ((float)lasty - yoffs) * yscale;
+        coords.x1 = ((float)curpoint->x - xoffs) * xscale;
+        coords.y1 = ((float)curpoint->y - yoffs) * yscale;
 
         if (curpoint->intensity != 0)
         {
@@ -203,14 +204,14 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
                 (curpoint->intensity << 24) | (curpoint->col & 0xffffff),
                 flags);
 
-            // Print the line segment details
-            std::cout << "Segment ID: " << segment_id << ", "
-                      << "add_line called with: "
-                      << "x0: " << coords.x0 << ", y0: " << coords.y0
-                      << ", x1: " << coords.x1 << ", y1: " << coords.y1
-                      << ", beam_width: " << beam_width
-                      << ", color: " << std::hex << ((curpoint->intensity << 24) | (curpoint->col & 0xffffff)) << std::dec
-                      << ", flags: " << flags << std::endl;
+            // Serialize the line segment details
+            std::cout << "S " << segment_id << " "
+                      << std::fixed << std::setprecision(6)
+                      << coords.x0 << " " << coords.y0 << " "
+                      << coords.x1 << " " << coords.y1 << " "
+                      << beam_width << " "
+                      << std::hex << ((curpoint->intensity << 24) | (curpoint->col & 0xffffff)) << " "
+                      << std::dec << flags << "\n";
         }
         else if (lastx != curpoint->x || lasty != curpoint->y)
         {
@@ -218,38 +219,14 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
             segment_id++;
         }
 
-		lastx = curpoint->x;
-		lasty = curpoint->y;
+        lastx = curpoint->x;
+        lasty = curpoint->y;
 
-		curpoint++;
-	}
-
-
-        /*
-    const char* header = "FRAME_DATA\n";
-    const char* trailer = "END_FRAME_DATA\n";
-    std::cout.write(header, strlen(header));
-    std::cout.write(reinterpret_cast<const char*>(&m_vector_index), sizeof(m_vector_index));
-    for (int i = 0; i < m_vector_index; ++i) {
-        const point &pt = m_vector_list[i];
-        std::cout.write(reinterpret_cast<const char*>(&pt.x), sizeof(pt.x));
-        std::cout.write(reinterpret_cast<const char*>(&pt.y), sizeof(pt.y));
-        std::cout.write(reinterpret_cast<const char*>(&pt.col), sizeof(pt.col));
-        std::cout.write(reinterpret_cast<const char*>(&pt.intensity), sizeof(pt.intensity));
+        curpoint++;
     }
-    std::cout.write(trailer, strlen(trailer));
 
+    // End of frame message
+    std::cout << "E\n";
 
-            // Print all points at the end of the function
-    for (int i = 0; i < m_vector_index; ++i) {
-        const point &pt = m_vector_list[i];
-        uint8_t a = pt.col.a();
-        uint8_t r = pt.col.r();
-        uint8_t g = pt.col.g();
-        uint8_t b = pt.col.b();
-        std::cout << "Point " << i << ": (x: " << pt.x << ", y: " << pt.y
-                  << ", col: rgba(" << r << ", " << g << ", "
-                  << b << ", " << a << "), intensity: " << pt.intensity << ")\n";
-    }*/
-	return 0;
+    return 0;
 }
