@@ -215,7 +215,7 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
         }
         else if (lastx != curpoint->x || lasty != curpoint->y)
         {
-            // Increment segment ID when blanking occurs and the beam moves
+            // Increment segment ID when the beam moves during blanking.
             segment_id++;
         }
 
