@@ -160,7 +160,7 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 {
     int segment_id = 0; // Static variable to maintain segment ID across frames
 
-    int blanked = 0;
+    int blanked = 1;
 
     uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
     const rectangle &visarea = screen.visible_area();
