@@ -160,6 +160,8 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 {
     int segment_id = 0; // Static variable to maintain segment ID across frames
 
+    int blanked = 0;
+
     uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
     const rectangle &visarea = screen.visible_area();
     float xscale = 1.0f / (65536 * visarea.width());
@@ -202,6 +204,7 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 
         if (curpoint->intensity != 0)
         {
+          // this is where the missing shit is coming from, x0 lastx needs to be drawn to the first non blanked point.
             screen.container().add_line(
                 coords.x0, coords.y0, coords.x1, coords.y1,
                 beam_width,
@@ -213,6 +216,16 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
 
             if (curpoint->x != lastx || curpoint->y != lasty)
             {
+                // Serialize the point details
+                if (blanked){
+                	std::cout << "P " << segment_id << " "
+                    	      << std::fixed << std::setprecision(6)
+                              << coords.x0 << " " << coords.y0 << " "
+                              << std::hex << (curpoint->col & 0xffffff) << " "
+                              << std::dec << curpoint->intensity << "\n";
+                	blanked = 0;
+                }
+
                 // Serialize the point details
                 std::cout << "P " << segment_id << " "
                           << std::fixed << std::setprecision(6)
@@ -228,6 +241,7 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
         {
             // Increment segment ID when blanking occurs and the beam moves
             segment_id++;
+            blanked = 1;
         }
 
         lastx = curpoint->x;
