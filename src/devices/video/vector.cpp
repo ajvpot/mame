@@ -48,6 +48,9 @@
 #include "render.h"
 #include "screen.h"
 
+#include <iostream>
+#include <iomanip> // For std::setw and std::setfill
+
 
 #define VECTOR_WIDTH_DENOM 512
 
@@ -146,64 +149,109 @@ void vector_device::clear_list(void)
 {
 	m_vector_index = 0;
 }
+#include <iostream> // Include the iostream header for std::cout
+#include <iomanip>  // Include for std::hex and std::setprecision
 
+
+#include <iostream> // Include the iostream header for std::cout
+#include <iomanip>  // Include for std::hex and std::setprecision
 
 uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
-	uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
-	const rectangle &visarea = screen.visible_area();
-	float xscale = 1.0f / (65536 * visarea.width());
-	float yscale = 1.0f / (65536 * visarea.height());
-	float xoffs = (float)visarea.min_x;
-	float yoffs = (float)visarea.min_y;
+    int segment_id = 0; // Static variable to maintain segment ID across frames
 
-	point *curpoint;
-	int lastx = 0;
-	int lasty = 0;
+    int blanked = 1;
 
-	curpoint = m_vector_list.get();
+    uint32_t flags = PRIMFLAG_ANTIALIAS(1) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD) | PRIMFLAG_VECTOR(1);
+    const rectangle &visarea = screen.visible_area();
+    float xscale = 1.0f / (65536 * visarea.width());
+    float yscale = 1.0f / (65536 * visarea.height());
+    float xoffs = (float)visarea.min_x;
+    float yoffs = (float)visarea.min_y;
 
-	screen.container().empty();
-	screen.container().add_rect(0.0f, 0.0f, 1.0f, 1.0f, rgb_t(0xff,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA) | PRIMFLAG_VECTORBUF(1));
+    point *curpoint;
+    int lastx = 0;
+    int lasty = 0;
 
-	for (int i = 0; i < m_vector_index; i++)
-	{
-		render_bounds coords;
+    curpoint = m_vector_list.get();
 
-		float intensity = (float)curpoint->intensity / 255.0f;
-		float intensity_weight = normalized_sigmoid(intensity, vector_options::s_beam_intensity_weight);
+    screen.container().empty();
+    screen.container().add_rect(0.0f, 0.0f, 1.0f, 1.0f, rgb_t(0xff,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA) | PRIMFLAG_VECTORBUF(1));
 
-		// check for static intensity
-		float beam_width = m_min_intensity == m_max_intensity
-			? vector_options::s_beam_width_min
-			: vector_options::s_beam_width_min + intensity_weight * (vector_options::s_beam_width_max - vector_options::s_beam_width_min);
+    for (int i = 0; i < m_vector_index; i++)
+    {
+        render_bounds coords;
 
-		// normalize width
-		beam_width *= 1.0f / (float)VECTOR_WIDTH_DENOM;
+        float intensity = (float)curpoint->intensity / 255.0f;
+        float intensity_weight = normalized_sigmoid(intensity, vector_options::s_beam_intensity_weight);
 
-		// apply point scale for points
-		if (lastx == curpoint->x && lasty == curpoint->y)
-			beam_width *= vector_options::s_beam_dot_size;
+        // check for static intensity
+        float beam_width = m_min_intensity == m_max_intensity
+            ? vector_options::s_beam_width_min
+            : vector_options::s_beam_width_min + intensity_weight * (vector_options::s_beam_width_max - vector_options::s_beam_width_min);
 
-		coords.x0 = ((float)lastx - xoffs) * xscale;
-		coords.y0 = ((float)lasty - yoffs) * yscale;
-		coords.x1 = ((float)curpoint->x - xoffs) * xscale;
-		coords.y1 = ((float)curpoint->y - yoffs) * yscale;
+        // normalize width
+        beam_width *= 1.0f / (float)VECTOR_WIDTH_DENOM;
 
-		if (curpoint->intensity != 0)
-		{
-			screen.container().add_line(
-				coords.x0, coords.y0, coords.x1, coords.y1,
-				beam_width,
-				(curpoint->intensity << 24) | (curpoint->col & 0xffffff),
-				flags);
-		}
+        // apply point scale for points
+        if (lastx == curpoint->x && lasty == curpoint->y)
+            beam_width *= vector_options::s_beam_dot_size;
 
-		lastx = curpoint->x;
-		lasty = curpoint->y;
+        coords.x0 = ((float)lastx - xoffs) * xscale;
+        coords.y0 = ((float)lasty - yoffs) * yscale;
+        coords.x1 = ((float)curpoint->x - xoffs) * xscale;
+        coords.y1 = ((float)curpoint->y - yoffs) * yscale;
 
-		curpoint++;
-	}
+        if (curpoint->intensity != 0)
+        {
+          // this is where the missing shit is coming from, x0 lastx needs to be drawn to the first non blanked point.
+            screen.container().add_line(
+                coords.x0, coords.y0, coords.x1, coords.y1,
+                beam_width,
+                (curpoint->intensity << 24) | (curpoint->col & 0xffffff),
+                flags);
 
-	return 0;
+            float x = ((float)curpoint->x - xoffs) * xscale;
+            float y = ((float)curpoint->y - yoffs) * yscale;
+
+            if (curpoint->x != lastx || curpoint->y != lasty)
+            {
+                // Serialize the point details
+                if (blanked){
+                	std::cout << "P " << segment_id << " "
+                    	      << std::fixed << std::setprecision(6)
+                              << coords.x0 << " " << coords.y0 << " "
+                              << std::hex << (curpoint->col & 0xffffff) << " "
+                              << std::dec << curpoint->intensity << "\n";
+                	blanked = 0;
+                }
+
+                // Serialize the point details
+                std::cout << "P " << segment_id << " "
+                          << std::fixed << std::setprecision(6)
+                          << x << " " << y << " "
+                          << std::hex << (curpoint->col & 0xffffff) << " "
+                          << std::dec << curpoint->intensity << "\n";
+
+                lastx = curpoint->x;
+                lasty = curpoint->y;
+            }
+        }
+        else if (curpoint->x != lastx || curpoint->y != lasty)
+        {
+            // Increment segment ID when blanking occurs and the beam moves
+            segment_id++;
+            blanked = 1;
+        }
+
+        lastx = curpoint->x;
+        lasty = curpoint->y;
+
+        curpoint++;
+    }
+
+    // End of frame message
+    std::cout << "E\n";
+
+    return 0;
 }
