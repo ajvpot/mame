@@ -152,6 +152,10 @@ void vector_device::clear_list(void)
 #include <iostream> // Include the iostream header for std::cout
 #include <iomanip>  // Include for std::hex and std::setprecision
 
+
+#include <iostream> // Include the iostream header for std::cout
+#include <iomanip>  // Include for std::hex and std::setprecision
+
 uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitmap, const rectangle &cliprect)
 {
     int segment_id = 0; // Static variable to maintain segment ID across frames
@@ -204,18 +208,25 @@ uint32_t vector_device::screen_update(screen_device &screen, bitmap_rgb32 &bitma
                 (curpoint->intensity << 24) | (curpoint->col & 0xffffff),
                 flags);
 
-            // Serialize the line segment details
-            std::cout << "S " << segment_id << " "
-                      << std::fixed << std::setprecision(6)
-                      << coords.x0 << " " << coords.y0 << " "
-                      << coords.x1 << " " << coords.y1 << " "
-                      << beam_width << " "
-                      << std::hex << ((curpoint->intensity << 24) | (curpoint->col & 0xffffff)) << " "
-                      << std::dec << flags << "\n";
+            float x = ((float)curpoint->x - xoffs) * xscale;
+            float y = ((float)curpoint->y - yoffs) * yscale;
+
+            if (curpoint->x != lastx || curpoint->y != lasty)
+            {
+                // Serialize the point details
+                std::cout << "P " << segment_id << " "
+                          << std::fixed << std::setprecision(6)
+                          << x << " " << y << " "
+                          << std::hex << (curpoint->col & 0xffffff) << " "
+                          << std::dec << curpoint->intensity << "\n";
+
+                lastx = curpoint->x;
+                lasty = curpoint->y;
+            }
         }
-        else if (lastx != curpoint->x || lasty != curpoint->y)
+        else if (curpoint->x != lastx || curpoint->y != lasty)
         {
-            // Increment segment ID when the beam moves during blanking.
+            // Increment segment ID when blanking occurs and the beam moves
             segment_id++;
         }
 
